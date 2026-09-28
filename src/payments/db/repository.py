@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from payments.db.models import TransactionRecord
-from payments.domain.fraud import Decision
+from payments.domain.fraud import Decision, Status
 from payments.domain.transaction import Transaction
 
 
@@ -48,3 +49,30 @@ def record_decision(session: Session, transaction: Transaction, decision: Decisi
             },
         )
     )
+
+
+def insert_pending(
+    session: Session,
+    *,
+    transaction_id: str,
+    customer_id: str,
+    amount: Decimal,
+    currency: str,
+    country: str,
+    created_at: datetime,
+) -> None:
+    session.add(
+        TransactionRecord(
+            transaction_id=transaction_id,
+            customer_id=customer_id,
+            amount=amount,
+            currency=currency,
+            country=country,
+            status=Status.PENDING.value,
+            created_at=created_at,
+        )
+    )
+
+
+def fetch(session: Session, transaction_id: str) -> TransactionRecord | None:
+    return session.get(TransactionRecord, transaction_id)

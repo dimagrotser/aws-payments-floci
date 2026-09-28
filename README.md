@@ -6,22 +6,23 @@ status, failed messages end up in a DLQ, and a scheduled Lambda drops a daily CS
 All of it is Terraform. None of it needs an AWS account, because it runs on
 [Floci](https://floci.io), a local emulator.
 
-> **Status: work in progress.** Stage 2 is done: transactions go into SQS, a Lambda
-> reads the database credentials from Secrets Manager, applies the anti-fraud rules
-> against the customer's recent history and settles the row in PostgreSQL. Messages
-> nobody can parse end up in the dead letter queue. The API on ECS and the daily report
-> come next.
+> **Status: work in progress.** Stage 3 is done: a FastAPI service on ECS, behind an
+> application load balancer, accepts a transaction, writes it as pending and publishes it
+> to SQS. A Lambda reads the database credentials from Secrets Manager, applies the
+> anti-fraud rules against the customer's recent history and settles the row. Messages
+> nobody can parse end up in the dead letter queue. The daily report comes next.
 
 ## Quickstart
 
 ```bash
 make up           # start Floci (pinned to 2.1.0)
-make deploy       # build the Lambda package, apply the stack, migrate the database
+make deploy       # build and push the images, apply the stack, migrate the database
 make test         # unit tests
-make integration  # tests against the running emulator
+make integration  # pytest against the running emulator
+make e2e          # Playwright against the deployed API
 ```
 
-You need Docker and [uv](https://docs.astral.sh/uv/). Terraform runs in a pinned
+You need Docker, [uv](https://docs.astral.sh/uv/) and Node. Terraform runs in a pinned
 container, so there is no Terraform to install.
 
 The reasoning behind the technology choices is in [DECISIONS.md](DECISIONS.md).
@@ -29,25 +30,33 @@ The reasoning behind the technology choices is in [DECISIONS.md](DECISIONS.md).
 ## Trying it by hand
 
 ```bash
-QUEUE=$(jq -r .queue_url.value build/outputs.json)
+curl -s -X POST http://localhost:8088/transactions -H 'content-type: application/json' \
+  -d '{"customer_id": "cust-1", "amount": "25000", "currency": "EUR", "country": "DE"}'
+```
+
+The answer comes back immediately with a transaction id and the status `pending`. A second
+later the processor has had its say:
+
+```bash
+curl -s http://localhost:8088/transactions/<id>
+```
+
+Twenty five thousand euros is over the limit, so the transaction settles as rejected with
+the rule that turned it down. The same answer is in the database:
+
+```bash
 export AWS_ENDPOINT_URL=http://localhost:4566 AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test
-
-aws sqs send-message --queue-url "$QUEUE" --message-body '{
-  "transaction_id": "tx-1", "customer_id": "cust-1", "amount": "25000",
-  "currency": "EUR", "country": "DE", "created_at": "2026-09-29T10:00:00+00:00"}'
-
 PGPASSWORD=$(aws secretsmanager get-secret-value --secret-id payments-db/master \
-  --query SecretString --output text | jq -r .password)
-PGPASSWORD=$PGPASSWORD psql -h localhost -p 7001 -U payments -d payments \
+  --query SecretString --output text | jq -r .password) \
+  psql -h localhost -p 7001 -U payments -d payments \
   -c "select transaction_id, status, decision_reason from transactions"
 ```
 
-Twenty five thousand euros is over the limit, so the row settles as rejected with the rule
-that turned it down. Send something that is not JSON and watch it arrive in
+Put something that is not a transaction straight onto the queue and watch it arrive in
 `payments-transactions-dlq` about a minute later.
 
-Port 7001 is not a typo, and neither is connecting to `localhost` when the secret says
-`floci`. See the Floci section below.
+Port 8088 for an API that listens on 80, port 7001 for a database that thinks it is on
+5432, and `localhost` where the secret says `floci`. All three are explained below.
 
 ## Where Floci differs from AWS
 

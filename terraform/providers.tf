@@ -9,6 +9,9 @@ provider "aws" {
 
   endpoints {
     ec2            = local.floci_endpoint
+    ecr            = local.floci_endpoint
+    ecs            = local.floci_endpoint
+    elbv2          = local.floci_endpoint
     iam            = local.floci_endpoint
     lambda         = local.floci_endpoint
     logs           = local.floci_endpoint

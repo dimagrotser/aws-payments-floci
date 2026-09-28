@@ -15,6 +15,14 @@ lambda = [
     "sqlalchemy>=2.0.40",
     "pg8000>=1.31.5",
 ]
+api = [
+    "fastapi>=0.120.0",
+    "uvicorn>=0.38.0",
+    "pydantic>=2.12.0",
+    "boto3>=1.40.0",
+    "sqlalchemy>=2.0.40",
+    "pg8000>=1.31.5",
+]
 dev = [
     "alembic>=1.16.0",
     "boto3>=1.40.0",
@@ -26,7 +34,7 @@ dev = [
 [tool.uv]
 # The lambda group holds the runtime dependencies of the handlers, so the local
 # environment needs it too, not just the zips.
-default-groups = ["dev", "lambda"]
+default-groups = ["dev", "lambda", "api"]
 
 [build-system]
 requires = ["hatchling"]

@@ -74,3 +74,33 @@ resource "aws_lambda_event_source_mapping" "transactions" {
   # delivered again.
   function_response_types = ["ReportBatchItemFailures"]
 }
+
+module "api" {
+  source = "./modules/ecs_api"
+
+  name      = "${var.project}-api"
+  region    = var.region
+  image_tag = var.api_image_tag
+
+  vpc_id            = module.network.vpc_id
+  subnet_ids        = module.network.subnet_ids
+  security_group_id = module.network.security_group_id
+
+  environment = {
+    DB_SECRET_ARN = module.database.secret_arn
+    QUEUE_URL     = module.messaging.queue_url
+  }
+
+  policy_statements = [
+    {
+      sid       = "SubmitTransactions"
+      actions   = ["sqs:SendMessage"]
+      resources = [module.messaging.queue_arn]
+    },
+    {
+      sid       = "ReadDatabaseCredentials"
+      actions   = ["secretsmanager:GetSecretValue"]
+      resources = [module.database.secret_arn]
+    },
+  ]
+}

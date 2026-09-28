@@ -49,3 +49,9 @@ variable "velocity_window_minutes" {
   type        = number
   default     = 10
 }
+
+variable "api_image_tag" {
+  description = "Tag of the API image in ECR, set by scripts/push-api-image.sh"
+  type        = string
+  default     = "dev"
+}

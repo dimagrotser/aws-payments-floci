@@ -10,6 +10,12 @@ CACHE_DIR="${REPO_ROOT}/.cache/terraform"
 
 mkdir -p "${CACHE_DIR}/plugins"
 
+# Anything the caller set as TF_VAR_* has to survive the trip into the container.
+tf_vars=()
+while IFS='=' read -r name _; do
+  tf_vars+=(-e "$name")
+done < <(env | grep '^TF_VAR_' || true)
+
 exec docker run --rm -i \
   ${TF_TTY:+-t} \
   --network "${NETWORK}" \
@@ -23,4 +29,5 @@ exec docker run --rm -i \
   -e AWS_ACCESS_KEY_ID=test \
   -e AWS_SECRET_ACCESS_KEY=test \
   -e AWS_DEFAULT_REGION=us-east-1 \
+  "${tf_vars[@]+"${tf_vars[@]}"}" \
   "hashicorp/terraform:${TERRAFORM_VERSION}" "$@"

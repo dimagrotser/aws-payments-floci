@@ -9,7 +9,7 @@ AWS_ENV := AWS_ENDPOINT_URL=http://localhost:4566 AWS_ACCESS_KEY_ID=test \
 	AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1
 OUTPUT = uv run python -c "import json,sys;print(json.load(open('build/outputs.json'))[sys.argv[1]]['value'])"
 
-.PHONY: help up build deploy migrate destroy down clean logs test integration tf prose
+.PHONY: help up build deploy migrate destroy down clean logs test integration e2e tf prose
 
 help: ## Show available targets
 	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/\t/' | expand -t22
@@ -32,9 +32,15 @@ down: ## Stop Floci and the containers it started
 build: ## Lay out the Lambda packages
 	./scripts/build-lambda.sh processor
 
-deploy: build ## Apply the Terraform stack and bring the schema up to date
+deploy: build ## Apply the Terraform stack, push the API image, migrate the database
 	$(TF) init -input=false
-	$(TF) apply -auto-approve -input=false
+	@# The registry has to exist before there is anything to push to it, and the task
+	@# definition has to name an image that is already there. Hence the narrow first apply.
+	$(TF) apply -auto-approve -input=false -target=module.api.aws_ecr_repository.this
+	@repository=$$($(TF) output -raw api_repository_url) && \
+		tag=$$($(AWS_ENV) ./scripts/push-api-image.sh $$repository) && \
+		echo "pushed $$repository:$$tag" && \
+		TF_VAR_api_image_tag=$$tag $(TF) apply -auto-approve -input=false
 	@mkdir -p build && $(TF) output -json > build/outputs.json
 	@$(MAKE) --no-print-directory migrate
 	@echo "stack deployed; outputs in build/outputs.json"
@@ -53,6 +59,9 @@ test: ## Run the unit tests
 
 integration: ## Run the tests that talk to Floci (needs make deploy first)
 	@$(AWS_ENV) uv run pytest tests/integration
+
+e2e: ## Run the Playwright tests against the deployed API
+	cd tests/e2e && npm ci --no-audit --no-fund && npx playwright test
 
 clean: down ## Also drop local state and caches
 	rm -rf terraform/.terraform terraform/*.tfstate* terraform/*.tfplan .cache build

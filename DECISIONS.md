@@ -57,6 +57,28 @@ pg8000 speaks the PostgreSQL protocol in Python and needs no libpq, so the only 
 thing in a Lambda zip is SQLAlchemy's optional extensions. psycopg would be faster, and
 nothing here is fast enough for that to matter.
 
+## The ECR repository is applied before everything else
+
+A task definition has to name an image that already exists, and an image cannot be pushed
+to a registry that does not. So `make deploy` applies the repository on its own first,
+pushes, and only then applies the rest. In a real account the registry would usually live
+in a separate bootstrap stack for the same reason; a narrow `-target` is the same idea
+without a second state file.
+
+The tag is a hash of the files that end up in the image rather than a git revision,
+because while you are working the tree is almost always ahead of the last commit, and an
+image that does not change when the code does is worse than no tag at all.
+
+## The application and the agent have different roles
+
+The ECS task has two roles: the execution role pulls the image and opens the log stream,
+the task role is what the application itself runs as. Splitting them means the code can
+never accidentally use a permission that only the agent needs, and a `terraform test`
+asserts the two sets of actions do not overlap.
+
+Locally this is a claim about the Terraform rather than about the running system, because
+Floci does not vend task-role credentials. That caveat is in the README, not hidden here.
+
 ## The database password never enters the state file
 
 `random_password` would put the generated password in state in plain text. Instead an

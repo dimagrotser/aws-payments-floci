@@ -47,3 +47,28 @@ output "max_receive_count" {
   description = "Attempts before a message is moved aside, so tests know how long to wait"
   value       = var.max_receive_count
 }
+
+output "api_url" {
+  description = "Where to reach the API from the host"
+  value       = local.api_url_from_host
+}
+
+output "api_repository_url" {
+  description = "ECR repository the API image is pushed to"
+  value       = module.api.repository_url
+}
+
+output "api_log_group" {
+  description = "Log group the API container writes to"
+  value       = module.api.log_group
+}
+
+output "api_cluster" {
+  description = "ECS cluster running the API"
+  value       = module.api.cluster_name
+}
+
+output "api_service" {
+  description = "ECS service running the API"
+  value       = module.api.service_name
+}

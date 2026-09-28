@@ -1,0 +1,17 @@
+{
+  "name": "payments-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-secrets-manager": "3.1142.0",
+    "@aws-sdk/client-sqs": "3.1142.0",
+    "@playwright/test": "1.63.0",
+    "@types/node": "26.6.3",
+    "@types/pg": "8.23.1",
+    "pg": "8.23.0",
+    "typescript": "5.9.3"
+  }
+}
