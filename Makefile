@@ -6,7 +6,7 @@ SHELL := /usr/bin/env bash
 COMPOSE := docker compose
 TF := ./scripts/tf.sh
 
-.PHONY: help up down clean logs tf prose
+.PHONY: help up build deploy destroy down clean logs test integration tf prose
 
 help: ## Show available targets
 	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/\t/' | expand -t22
@@ -25,6 +25,24 @@ down: ## Stop Floci and the containers it started
 	@leftovers=$$(docker ps -aq --filter 'name=floci-'); \
 	if [ -n "$$leftovers" ]; then docker rm -f $$leftovers >/dev/null; echo "removed $$(echo $$leftovers | wc -w | tr -d ' ') floci-managed containers"; fi
 	$(COMPOSE) down -v --remove-orphans
+
+build: ## Lay out the Lambda packages
+	./scripts/build-lambda.sh processor
+
+deploy: build ## Apply the Terraform stack to the running Floci
+	$(TF) init -input=false
+	$(TF) apply -auto-approve -input=false
+	@mkdir -p build && $(TF) output -json > build/outputs.json
+	@echo "stack deployed; outputs in build/outputs.json"
+
+destroy: ## Remove everything Terraform created
+	$(TF) destroy -auto-approve -input=false
+
+test: ## Run the unit tests
+	uv run pytest tests/unit
+
+integration: ## Run the tests that talk to Floci (needs make deploy first)
+	uv run pytest tests/integration
 
 clean: down ## Also drop local state and caches
 	rm -rf terraform/.terraform terraform/*.tfstate* terraform/*.tfplan .cache build

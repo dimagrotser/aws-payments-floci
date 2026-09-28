@@ -30,7 +30,7 @@ allure-report/
 *.pem
 
 # Build artifacts
-build/lambda/
+build/
 
 # Tool caches
 .cache/

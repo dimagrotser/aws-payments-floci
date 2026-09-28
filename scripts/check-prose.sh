@@ -11,7 +11,8 @@ EM_DASH=$(printf '\xe2\x80\x94')
 if hits=$(grep -rn --binary-files=without-match "$EM_DASH" \
     --include='*.md' --include='*.py' --include='*.tf' --include='*.ts' \
     --include='*.yml' --include='*.yaml' --include='*.sh' \
-    --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=.cache .); then
+    --exclude-dir=.git --exclude-dir=.venv --exclude-dir=node_modules \
+    --exclude-dir=.cache --exclude-dir=build --exclude-dir=.terraform .); then
   echo "em dash found:"
   echo "$hits"
   exit 1
