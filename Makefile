@@ -20,10 +20,11 @@ up: ## Start Floci and wait until it is healthy
 	done; echo " timed out"; $(COMPOSE) logs --tail=40 floci; exit 1
 
 down: ## Stop Floci and the containers it started
-	$(COMPOSE) down -v --remove-orphans
-	@# Floci starts RDS/Lambda/ECS/ECR containers itself; compose does not know about them.
+	@# Floci starts RDS/Lambda/ECS/ECR containers itself and compose knows nothing about
+	@# them; they have to go first, or they keep the network alive.
 	@leftovers=$$(docker ps -aq --filter 'name=floci-'); \
 	if [ -n "$$leftovers" ]; then docker rm -f $$leftovers >/dev/null; echo "removed $$(echo $$leftovers | wc -w | tr -d ' ') floci-managed containers"; fi
+	$(COMPOSE) down -v --remove-orphans
 
 clean: down ## Also drop local state and caches
 	rm -rf terraform/.terraform terraform/*.tfstate* terraform/*.tfplan .cache build
