@@ -6,7 +6,7 @@ SHELL := /usr/bin/env bash
 COMPOSE := docker compose
 TF := ./scripts/tf.sh
 
-.PHONY: help up down clean logs tf
+.PHONY: help up down clean logs tf prose
 
 help: ## Show available targets
 	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/\t/' | expand -t22
@@ -31,6 +31,9 @@ clean: down ## Also drop local state and caches
 
 logs: ## Tail Floci logs
 	$(COMPOSE) logs -f floci
+
+prose: ## Check docs and comments for em dashes
+	./scripts/check-prose.sh
 
 tf: ## Run terraform with ARGS, e.g. make tf ARGS="plan"
 	$(TF) $(ARGS)

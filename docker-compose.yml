@@ -1,6 +1,6 @@
 # Floci emulates AWS locally. Pinned on purpose: `latest` would make every
 # `make up` a different environment. Each setting below works around a real
-# Floci behaviour — see docs/floci-notes.md for what was measured.
+# Floci behaviour. See docs/floci-notes.md for what was measured.
 name: payments
 
 services:
