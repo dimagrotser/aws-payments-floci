@@ -7,8 +7,7 @@ All of it is Terraform. None of it needs an AWS account, because it runs on
 [Floci](https://floci.io), a local emulator.
 
 > **Status: work in progress.** Stage 0 is done: the environment, and a spike that checks
-> what Floci actually does before anything gets built on top of it. The results are in
-> [docs/floci-notes.md](docs/floci-notes.md).
+> what Floci actually does before anything gets built on top of it.
 
 ## Quickstart
 

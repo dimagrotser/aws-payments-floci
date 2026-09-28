@@ -34,3 +34,6 @@ build/lambda/
 
 # Tool caches
 .cache/
+
+# Working notes, kept local
+docs/
