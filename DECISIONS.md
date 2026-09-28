@@ -32,19 +32,41 @@ connection reuse. Fraud checks and the daily report are short, bursty and event-
 which is the shape Lambda is for. Splitting them this way also makes the IAM story
 concrete, because the two halves need genuinely different permissions.
 
+## Lambda zips are built for the runtime's platform
+
+The original plan was to keep every Lambda dependency pure Python, so that one zip would
+run on the arm64 runtime image Floci pulls on an Apple laptop and on the amd64 one it
+pulls in CI. SQLAlchemy ended that in stage 2: it ships compiled extensions, and a build
+on macOS quietly produced a zip full of `.so` files ending in `darwin`.
+
+So `scripts/build-lambda.sh` now asks the Docker daemon which architecture it is on and
+installs wheels for the matching `manylinux` platform. That is the honest fix, and it
+costs six lines.
+
 ## Plain dataclasses in the domain, pydantic only at the HTTP edge
 
-pydantic v2 carries a compiled core. Floci pulls the arm64 Lambda runtime image on an
-Apple laptop and the amd64 one in CI, so a zip with a compiled wheel in it would work in
-exactly one of those places. Keeping the shared domain on dataclasses means one artifact
-runs everywhere. The API still uses pydantic for request validation, because it ships as a
-Docker image built for a known platform.
+Part of the original reasoning was about compiled wheels and no longer applies, see above.
+What is left still holds: the domain layer describes what a transaction is and when it is
+fraudulent, and that has no business depending on a web framework's validation library.
+The API converts at the edge, the handlers import the dataclasses, and the rules can be
+unit tested with nothing installed.
 
 ## pg8000 rather than psycopg
 
-Same reason, one layer down: pg8000 is pure Python, so the database code goes into a
-Lambda zip unchanged. psycopg would be faster, and nothing here is fast enough for that to
-matter.
+pg8000 speaks the PostgreSQL protocol in Python and needs no libpq, so the only native
+thing in a Lambda zip is SQLAlchemy's optional extensions. psycopg would be faster, and
+nothing here is fast enough for that to matter.
+
+## The database password never enters the state file
+
+`random_password` would put the generated password in state in plain text. Instead an
+ephemeral `random_password` feeds the write-only arguments `password_wo` on the instance
+and `secret_string_wo` on the secret version, both introduced for exactly this. The value
+is written once, to the two places that need it, and `terraform.tfstate` records `null`.
+
+The cost is a version counter: `password_version` has to be bumped to rotate the password,
+because write-only arguments are only sent when their version changes. That is also what
+keeps the instance and the secret from drifting apart.
 
 ## One shared Floci rather than testcontainers
 

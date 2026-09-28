@@ -6,15 +6,17 @@ status, failed messages end up in a DLQ, and a scheduled Lambda drops a daily CS
 All of it is Terraform. None of it needs an AWS account, because it runs on
 [Floci](https://floci.io), a local emulator.
 
-> **Status: work in progress.** Stage 1 is done: transactions go into SQS, a Lambda
-> applies the anti-fraud rules, decisions land in S3 and messages nobody can parse end up
-> in the dead letter queue. RDS, the API on ECS and the daily report come next.
+> **Status: work in progress.** Stage 2 is done: transactions go into SQS, a Lambda
+> reads the database credentials from Secrets Manager, applies the anti-fraud rules
+> against the customer's recent history and settles the row in PostgreSQL. Messages
+> nobody can parse end up in the dead letter queue. The API on ECS and the daily report
+> come next.
 
 ## Quickstart
 
 ```bash
 make up           # start Floci (pinned to 2.1.0)
-make deploy       # build the Lambda package and apply the Terraform stack
+make deploy       # build the Lambda package, apply the stack, migrate the database
 make test         # unit tests
 make integration  # tests against the running emulator
 ```
@@ -34,12 +36,18 @@ aws sqs send-message --queue-url "$QUEUE" --message-body '{
   "transaction_id": "tx-1", "customer_id": "cust-1", "amount": "25000",
   "currency": "EUR", "country": "DE", "created_at": "2026-09-29T10:00:00+00:00"}'
 
-aws s3api get-object --bucket payments-artifacts --key decisions/tx-1.json /dev/stdout
+PGPASSWORD=$(aws secretsmanager get-secret-value --secret-id payments-db/master \
+  --query SecretString --output text | jq -r .password)
+PGPASSWORD=$PGPASSWORD psql -h localhost -p 7001 -U payments -d payments \
+  -c "select transaction_id, status, decision_reason from transactions"
 ```
 
-Twenty five thousand euros is over the limit, so the decision comes back rejected with the
-rule that turned it down. Send something that is not JSON and watch it arrive in
+Twenty five thousand euros is over the limit, so the row settles as rejected with the rule
+that turned it down. Send something that is not JSON and watch it arrive in
 `payments-transactions-dlq` about a minute later.
+
+Port 7001 is not a typo, and neither is connecting to `localhost` when the secret says
+`floci`. See the Floci section below.
 
 ## Where Floci differs from AWS
 

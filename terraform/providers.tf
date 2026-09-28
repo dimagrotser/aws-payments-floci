@@ -8,12 +8,15 @@ provider "aws" {
   s3_use_path_style           = true
 
   endpoints {
-    iam    = local.floci_endpoint
-    lambda = local.floci_endpoint
-    logs   = local.floci_endpoint
-    s3     = local.floci_endpoint
-    sqs    = local.floci_endpoint
-    sts    = local.floci_endpoint
+    ec2            = local.floci_endpoint
+    iam            = local.floci_endpoint
+    lambda         = local.floci_endpoint
+    logs           = local.floci_endpoint
+    rds            = local.floci_endpoint
+    s3             = local.floci_endpoint
+    secretsmanager = local.floci_endpoint
+    sqs            = local.floci_endpoint
+    sts            = local.floci_endpoint
   }
 
   default_tags {

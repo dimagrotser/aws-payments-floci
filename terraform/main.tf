@@ -2,6 +2,20 @@ locals {
   build_dir = "${path.root}/../build"
 }
 
+module "network" {
+  source = "./modules/network"
+
+  name = var.project
+}
+
+module "database" {
+  source = "./modules/database"
+
+  name              = "${var.project}-db"
+  subnet_ids        = module.network.subnet_ids
+  security_group_id = module.network.security_group_id
+}
+
 module "storage" {
   source = "./modules/storage"
 
@@ -28,8 +42,7 @@ module "processor" {
   timeout = var.visibility_timeout_seconds - 5
 
   environment = {
-    DECISIONS_BUCKET        = module.storage.bucket
-    DECISIONS_PREFIX        = "decisions"
+    DB_SECRET_ARN           = module.database.secret_arn
     MAX_AMOUNT              = var.max_amount
     BLOCKED_COUNTRIES       = join(",", var.blocked_countries)
     VELOCITY_LIMIT          = var.velocity_limit
@@ -43,9 +56,9 @@ module "processor" {
       resources = [module.messaging.queue_arn]
     },
     {
-      sid       = "WriteDecisions"
-      actions   = ["s3:PutObject"]
-      resources = ["${module.storage.arn}/decisions/*"]
+      sid       = "ReadDatabaseCredentials"
+      actions   = ["secretsmanager:GetSecretValue"]
+      resources = [module.database.secret_arn]
     },
   ]
 }

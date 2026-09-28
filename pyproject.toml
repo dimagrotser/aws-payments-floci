@@ -11,13 +11,22 @@ dependencies = []
 # Everything the Lambda zips carry. Pure Python only: Floci pulls the arm64 runtime
 # image on this laptop and the amd64 one in CI, and a compiled wheel would only fit one
 # of them. boto3 comes with the runtime image, so it is a dev dependency, not a bundled one.
-lambda = []
+lambda = [
+    "sqlalchemy>=2.0.40",
+    "pg8000>=1.31.5",
+]
 dev = [
+    "alembic>=1.16.0",
     "boto3>=1.40.0",
     "pytest>=8.4.0",
     "pytest-timeout>=2.4.0",
     "ruff>=0.14.0",
 ]
+
+[tool.uv]
+# The lambda group holds the runtime dependencies of the handlers, so the local
+# environment needs it too, not just the zips.
+default-groups = ["dev", "lambda"]
 
 [build-system]
 requires = ["hatchling"]

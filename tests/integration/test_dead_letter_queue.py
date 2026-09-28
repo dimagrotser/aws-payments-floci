@@ -1,16 +1,10 @@
-"""What happens to messages the processor cannot make sense of.
-
-Waiting for a redrive is the slowest thing this suite does: the message has to be
-received max_receive_count times, and after each failure it waits out the queue's
-visibility timeout. So the scenario is set up once, in a module-scoped fixture, and the
-tests below read the result of that single run.
-"""
-
 import json
 
 import pytest
+from sqlalchemy import select
 
-from tests.integration.conftest import drain, transaction, wait_for
+from payments.db.models import TransactionRecord
+from tests.integration.conftest import clear_transactions, drain, transaction, wait_for
 
 pytestmark = pytest.mark.integration
 
@@ -18,10 +12,13 @@ NOT_JSON = "this is not a transaction"
 
 
 @pytest.fixture(scope="module")
-def redrive(sqs, s3, outputs):
-    """Send two poison messages and one healthy one, then wait for the dust to settle."""
+def redrive(sqs, outputs, db_engine):
+    # The slowest thing in the suite: a message has to be received max_receive_count
+    # times, waiting out the visibility timeout after each failure. Paid once here
+    # rather than once per assertion.
     drain(sqs, outputs["queue_url"])
     drain(sqs, outputs["dlq_url"])
+    clear_transactions(db_engine)
 
     healthy_id = "tx-dlq-neighbour"
     missing_amount = transaction("tx-dlq-no-amount")
@@ -60,13 +57,15 @@ def test_a_transaction_missing_a_field_is_moved_aside(redrive):
     assert any(redrive["missing_amount_id"] in body for body in bodies)
 
 
-def test_the_healthy_message_is_not_dragged_down_with_them(redrive, s3, outputs):
-    # The event source mapping reports failures per message, so the good one is deleted
-    # from the queue while only the poison ones go round again.
-    key = f"{outputs['decisions_prefix']}/{redrive['healthy_id']}.json"
-    decision = json.loads(s3.get_object(Bucket=outputs["bucket"], Key=key)["Body"].read())
+def test_the_healthy_message_is_not_dragged_down_with_them(redrive, db):
+    # The event source mapping reports failures per message, so the good one is settled
+    # while only the poison ones go round again.
+    record = db.scalar(
+        select(TransactionRecord).where(TransactionRecord.transaction_id == redrive["healthy_id"])
+    )
 
-    assert decision["status"] == "approved"
+    assert record is not None
+    assert record.status == "approved"
 
 
 def test_nothing_else_ends_up_in_the_dead_letter_queue(redrive):

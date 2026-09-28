@@ -5,8 +5,11 @@ SHELL := /usr/bin/env bash
 
 COMPOSE := docker compose
 TF := ./scripts/tf.sh
+AWS_ENV := AWS_ENDPOINT_URL=http://localhost:4566 AWS_ACCESS_KEY_ID=test \
+	AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1
+OUTPUT = uv run python -c "import json,sys;print(json.load(open('build/outputs.json'))[sys.argv[1]]['value'])"
 
-.PHONY: help up build deploy destroy down clean logs test integration tf prose
+.PHONY: help up build deploy migrate destroy down clean logs test integration tf prose
 
 help: ## Show available targets
 	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/\t/' | expand -t22
@@ -29,11 +32,18 @@ down: ## Stop Floci and the containers it started
 build: ## Lay out the Lambda packages
 	./scripts/build-lambda.sh processor
 
-deploy: build ## Apply the Terraform stack to the running Floci
+deploy: build ## Apply the Terraform stack and bring the schema up to date
 	$(TF) init -input=false
 	$(TF) apply -auto-approve -input=false
 	@mkdir -p build && $(TF) output -json > build/outputs.json
+	@$(MAKE) --no-print-directory migrate
 	@echo "stack deployed; outputs in build/outputs.json"
+
+# Alembic runs from the host, which is why it overrides the hostname: Floci advertises
+# the database under a name only containers can resolve, but publishes its port.
+migrate: ## Apply database migrations
+	@DB_SECRET_ARN=$$($(OUTPUT) db_secret_arn) DB_HOST=localhost $(AWS_ENV) \
+		uv run alembic upgrade head
 
 destroy: ## Remove everything Terraform created
 	$(TF) destroy -auto-approve -input=false
@@ -42,7 +52,7 @@ test: ## Run the unit tests
 	uv run pytest tests/unit
 
 integration: ## Run the tests that talk to Floci (needs make deploy first)
-	uv run pytest tests/integration
+	@$(AWS_ENV) uv run pytest tests/integration
 
 clean: down ## Also drop local state and caches
 	rm -rf terraform/.terraform terraform/*.tfstate* terraform/*.tfplan .cache build

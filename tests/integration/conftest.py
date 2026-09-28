@@ -1,22 +1,22 @@
-"""Fixtures for the tests that talk to a running Floci.
-
-One shared emulator rather than one per test, see DECISIONS.md. Isolation comes from the
-cleanup fixtures below plus a unique transaction id per test.
-"""
-
 from __future__ import annotations
 
 import json
 import os
 import time
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 
 import boto3
 import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
 
 OUTPUTS = Path(__file__).resolve().parents[2] / "build" / "outputs.json"
 ENDPOINT = os.environ.get("AWS_ENDPOINT_URL", "http://localhost:4566")
+os.environ.setdefault("AWS_ENDPOINT_URL", ENDPOINT)
+
+from payments.db.engine import database_url, load_credentials  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -54,14 +54,52 @@ def iam():
 
 
 @pytest.fixture(scope="session")
+def db_engine(outputs):
+    # Floci advertises the database under a name only containers resolve, but the port
+    # it gives out is published, so the host connects to the same port on localhost.
+    credentials = load_credentials(outputs["db_secret_arn"])
+    return create_engine(database_url(credentials, host="localhost"))
+
+
+@pytest.fixture
+def db(db_engine) -> Iterator[Session]:
+    # No explicit transaction: the tests poll for rows another process writes, and
+    # db.rollback() is how they drop a stale snapshot and look again.
+    with Session(db_engine) as session:
+        yield session
+        session.rollback()
+
+
+def clear_transactions(engine) -> None:
+    # DELETE rather than TRUNCATE: TRUNCATE wants an exclusive lock on the table, and a
+    # test's own session is often still holding a read transaction when this runs.
+    with Session(engine) as session, session.begin():
+        session.execute(text("delete from transactions"))
+
+
+@pytest.fixture(scope="session", autouse=True)
+def start_from_a_known_state(db_engine, sqs, outputs):
+    # Whatever an interrupted run left behind is not this run's business.
+    clear_transactions(db_engine)
+    drain(sqs, outputs["queue_url"])
+    drain(sqs, outputs["dlq_url"])
+
+
+@pytest.fixture
+def clean_transactions(db_engine):
+    clear_transactions(db_engine)
+    yield
+    clear_transactions(db_engine)
+
+
+@pytest.fixture(scope="session")
 def queue_arn(outputs) -> str:
-    """Floci hands out queue URLs, and IAM talks in ARNs."""
+    # Floci hands out queue URLs, and IAM talks in ARNs.
     name = outputs["queue_url"].rsplit("/", 1)[-1]
     return f"arn:aws:sqs:{os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')}:000000000000:{name}"
 
 
 def drain(sqs, queue_url: str) -> list[dict]:
-    """Take everything off a queue and return it. Used both to clean up and to assert."""
     drained = []
     while True:
         batch = sqs.receive_message(
@@ -78,7 +116,6 @@ def drain(sqs, queue_url: str) -> list[dict]:
 
 @pytest.fixture
 def clean_queues(sqs, outputs):
-    """Both queues start and end empty, so one test cannot see another's leftovers."""
     drain(sqs, outputs["queue_url"])
     drain(sqs, outputs["dlq_url"])
     yield
@@ -101,9 +138,11 @@ def submit(sqs, outputs):
 
 
 def transaction(transaction_id: str, **overrides) -> dict:
+    # A customer of its own by default. The velocity rule counts what the same customer
+    # did recently, so sharing one across tests would let them reject each other.
     return {
         "transaction_id": transaction_id,
-        "customer_id": "cust-integration",
+        "customer_id": f"cust-{transaction_id}",
         "amount": "100.00",
         "currency": "EUR",
         "country": "DE",
@@ -112,8 +151,7 @@ def transaction(transaction_id: str, **overrides) -> dict:
 
 
 def wait_for(probe, timeout: float, interval: float = 1.0, description: str = "condition"):
-    """Poll until probe returns something truthy. Every effect here is asynchronous, so
-    assertions need a deadline rather than a sleep."""
+    # Every effect here is asynchronous, so assertions need a deadline, not a sleep.
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         result = probe()

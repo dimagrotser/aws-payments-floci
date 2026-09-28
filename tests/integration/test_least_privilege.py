@@ -1,9 +1,3 @@
-"""Checked against the deployed role, not against the .tf file.
-
-Floci evaluates IAM for real, so `simulate-principal-policy` answers the same question
-the emulator would answer at request time. Widen the policy and these tests go red.
-"""
-
 import pytest
 
 pytestmark = pytest.mark.integration
@@ -13,6 +7,8 @@ ROLE = "arn:aws:iam::000000000000:role/payments-processor-role"
 
 @pytest.fixture(scope="module")
 def simulate(iam):
+    # Floci evaluates IAM for real, so the simulator answers the same question the
+    # emulator would answer at request time.
     def _simulate(action: str, resource: str) -> str:
         results = iam.simulate_principal_policy(
             PolicySourceArn=ROLE, ActionNames=[action], ResourceArns=[resource]
@@ -22,24 +18,24 @@ def simulate(iam):
     return _simulate
 
 
-def test_it_may_write_its_own_decisions(simulate, outputs):
-    decision = simulate("s3:PutObject", f"arn:aws:s3:::{outputs['bucket']}/decisions/tx-1.json")
-
-    assert decision == "allowed"
+def test_it_may_read_the_database_credentials(simulate, outputs):
+    assert simulate("secretsmanager:GetSecretValue", outputs["db_secret_arn"]) == "allowed"
 
 
-def test_it_may_not_write_anywhere_else_in_the_bucket(simulate, outputs):
-    # The reports prefix belongs to the reporter, which arrives in stage 4.
-    decision = simulate("s3:PutObject", f"arn:aws:s3:::{outputs['bucket']}/reports/2026-09-29.csv")
+@pytest.mark.parametrize(
+    "action",
+    ["secretsmanager:PutSecretValue", "secretsmanager:DeleteSecret", "secretsmanager:UpdateSecret"],
+)
+def test_it_may_only_read_that_secret(simulate, outputs, action):
+    assert simulate(action, outputs["db_secret_arn"]) != "allowed"
 
-    assert decision != "allowed"
 
+def test_it_has_no_business_in_the_bucket(simulate, outputs):
+    # Nothing writes to the bucket until the reporter arrives in stage 4.
+    bucket = f"arn:aws:s3:::{outputs['bucket']}"
 
-@pytest.mark.parametrize("action", ["s3:GetObject", "s3:DeleteObject", "s3:ListBucket"])
-def test_it_may_only_write_to_s3(simulate, outputs, action):
-    decision = simulate(action, f"arn:aws:s3:::{outputs['bucket']}/decisions/tx-1.json")
-
-    assert decision != "allowed"
+    assert simulate("s3:PutObject", f"{bucket}/reports/2026-09-29.csv") != "allowed"
+    assert simulate("s3:GetObject", f"{bucket}/reports/2026-09-29.csv") != "allowed"
 
 
 def test_it_may_consume_its_queue(simulate, queue_arn):

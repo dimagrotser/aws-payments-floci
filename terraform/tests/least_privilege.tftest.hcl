@@ -1,6 +1,5 @@
-# Actions are known before apply, so a stray wildcard is caught here without a running
-# emulator. Resources are not, and tests/integration/test_least_privilege.py checks those
-# against the deployed role.
+# Actions are known before apply; the resources they apply to are not, so those are
+# checked against the deployed role in tests/integration/test_least_privilege.py.
 
 variables {
   project = "tftest"
@@ -22,14 +21,26 @@ run "nothing_is_granted_with_a_wildcard" {
   }
 }
 
-run "the_processor_only_writes_to_s3" {
+run "the_processor_touches_no_storage_of_its_own" {
+  command = plan
+
+  assert {
+    condition = length([
+      for action in module.processor.granted_actions : action if startswith(action, "s3:")
+    ]) == 0
+    error_message = "the processor writes to the database, not to the bucket"
+  }
+}
+
+run "the_processor_only_reads_the_secret" {
   command = plan
 
   assert {
     condition = [
-      for action in module.processor.granted_actions : action if startswith(action, "s3:")
-    ] == ["s3:PutObject"]
-    error_message = "the processor should write decisions and nothing more"
+      for action in module.processor.granted_actions :
+      action if startswith(action, "secretsmanager:")
+    ] == ["secretsmanager:GetSecretValue"]
+    error_message = "reading the credentials is all the processor needs"
   }
 }
 

@@ -3,9 +3,24 @@ output "bucket" {
   value       = module.storage.bucket
 }
 
-output "decisions_prefix" {
-  description = "Where the processor writes its decisions"
-  value       = "decisions"
+output "db_secret_arn" {
+  description = "Secret holding the database credentials"
+  value       = module.database.secret_arn
+}
+
+output "db_address" {
+  description = "Hostname of the database as Floci advertises it"
+  value       = module.database.address
+}
+
+output "db_port" {
+  description = "Port of the database; on Floci a proxy port, not 5432"
+  value       = module.database.port
+}
+
+output "db_name" {
+  description = "Name of the database"
+  value       = module.database.database_name
 }
 
 output "queue_url" {
