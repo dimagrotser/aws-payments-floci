@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+
+# Node / Playwright
+node_modules/
+test-results/
+playwright-report/
+blob-report/
+
+# Reports
+allure-results/
+allure-report/
+
+# Local config and secrets
+.env
+*.pem
+
+# Build artifacts
+build/lambda/
+
+# Tool caches
+.cache/
