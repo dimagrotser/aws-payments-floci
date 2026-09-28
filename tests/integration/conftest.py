@@ -1,9 +1,7 @@
 """Fixtures for the tests that talk to a running Floci.
 
-There is one shared emulator rather than one per test (see decisions.md): Floci starts
-real Docker containers for Lambda, and spinning a fresh emulator up per test would trade
-a few seconds of cleanup for minutes of waiting. Isolation comes from the cleanup
-fixtures below plus a unique transaction id per test.
+One shared emulator rather than one per test, see DECISIONS.md. Isolation comes from the
+cleanup fixtures below plus a unique transaction id per test.
 """
 
 from __future__ import annotations
@@ -114,11 +112,8 @@ def transaction(transaction_id: str, **overrides) -> dict:
 
 
 def wait_for(probe, timeout: float, interval: float = 1.0, description: str = "condition"):
-    """Poll until probe returns something truthy, then return it.
-
-    Everything in this system is asynchronous, so every assertion about an effect needs
-    a deadline rather than a sleep.
-    """
+    """Poll until probe returns something truthy. Every effect here is asynchronous, so
+    assertions need a deadline rather than a sleep."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         result = probe()

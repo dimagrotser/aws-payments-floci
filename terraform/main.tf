@@ -24,8 +24,7 @@ module "processor" {
   build_dir  = local.build_dir
   handler    = "payments.processor.handler.handler"
 
-  # Leaves room for the visibility timeout to do its job: the function has to give up
-  # before SQS hands the message to anyone else.
+  # The function has to give up before SQS shows the message to anyone else.
   timeout = var.visibility_timeout_seconds - 5
 
   environment = {
@@ -44,7 +43,6 @@ module "processor" {
       resources = [module.messaging.queue_arn]
     },
     {
-      # The prefix matters: the processor has no business touching the reports.
       sid       = "WriteDecisions"
       actions   = ["s3:PutObject"]
       resources = ["${module.storage.arn}/decisions/*"]
@@ -59,7 +57,7 @@ resource "aws_lambda_event_source_mapping" "transactions" {
   batch_size                         = 10
   maximum_batching_window_in_seconds = 1
 
-  # Without this a single bad message would fail the whole batch and send its healthy
-  # neighbours round for another attempt.
+  # Otherwise one bad message fails the whole batch and its healthy neighbours are
+  # delivered again.
   function_response_types = ["ReportBatchItemFailures"]
 }

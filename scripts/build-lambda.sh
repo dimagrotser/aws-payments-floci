@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
-# Lays out a Lambda zip's contents: the payments package plus whatever is in the
-# `lambda` dependency group. Terraform's archive_file turns the directory into the zip.
-#
-# The API subpackage is left out. It pulls in FastAPI, which the handlers never import
-# and which would bloat every zip with a compiled dependency.
+# Lays out what goes into a Lambda zip; terraform's archive_file does the zipping.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -15,6 +11,7 @@ rm -rf "$out"
 mkdir -p "$out"
 
 cp -R src/payments "$out/payments"
+# The API subpackage would drag FastAPI, and a compiled dependency, into every zip.
 rm -rf "$out/payments/api"
 find "$out" -name '__pycache__' -type d -prune -exec rm -rf {} +
 

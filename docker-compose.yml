@@ -1,30 +1,24 @@
-# Floci emulates AWS locally. Pinned on purpose: `latest` would make every
-# `make up` a different environment. Each setting below works around a real
-# Floci behaviour. See docs/floci-notes.md for what was measured.
 name: payments
 
 services:
   floci:
     image: floci/floci:2.1.0
     ports:
-      - "4566:4566"           # every AWS API, plus the ECR data plane
-      - "7001-7099:7001-7099" # RDS proxy ports: Floci advertises one of these, not 5432
-      - "8088:80"             # our ALB listener: it binds a real socket inside this container
+      - "4566:4566"
+      - "7001-7099:7001-7099" # RDS is advertised on one of these, never on 5432
+      - "8088:80"             # the ALB listener binds inside this container, not on the host
     environment:
-      # Without this, returned URLs (SQS QueueUrl, the AWS_ENDPOINT_URL injected into
-      # Lambda containers) say "localhost", which resolves to the caller's own container.
+      # Unset, Floci puts "localhost" in every URL it hands out, which any other
+      # container resolves to itself.
       FLOCI_HOSTNAME: floci
-      # Containers Floci starts (Lambda, RDS, ECS tasks) join our network, so they can
-      # reach `floci` by name and the ALB can reach them.
+      # Lambda, RDS and ECS containers join this network so they can reach `floci`.
       FLOCI_SERVICES_DOCKER_NETWORK: payments_default
-      # Advertise RDS as `floci:<proxy-port>` instead of Floci's container IP.
       FLOCI_SERVICES_RDS_ENDPOINT_HOST: floci
-      # Task-role credentials need this specific variable; the global one above is not enough.
+      # Task-role credentials need this one specifically; the global variable above is
+      # not enough. Floci does not vend them yet either way, see README.
       FLOCI_SERVICES_ECS_DOCKER_NETWORK: payments_default
-      # Hands the ECS task its task-role credentials; off by default, and without it
-      # the API container would fall back to unrestricted credentials.
       FLOCI_SERVICES_ECS_TASK_ROLE_CREDENTIALS_ENABLED: "true"
-      # Off by default in Floci: without it every IAM policy in terraform/ is decoration.
+      # Off by default, and without it every IAM policy in terraform/ is decoration.
       FLOCI_SERVICES_IAM_ENFORCEMENT_ENABLED: "true"
       FLOCI_STORAGE_MODE: memory
       QUARKUS_LOG_LEVEL: INFO

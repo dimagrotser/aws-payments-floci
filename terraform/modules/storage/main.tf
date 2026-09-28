@@ -1,12 +1,7 @@
-# One bucket, two prefixes: decisions/ written by the processor, reports/ written by the
-# daily reporter. Splitting them into two buckets would buy nothing here and would double
-# the policy surface.
-
 resource "aws_s3_bucket" "this" {
   bucket = var.name
 
-  # This is a disposable local environment; make clean should not leave a bucket behind
-  # that nothing can delete.
+  # make clean should not leave a bucket behind that nothing can delete.
   force_destroy = true
 }
 

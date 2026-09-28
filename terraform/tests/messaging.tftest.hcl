@@ -1,6 +1,3 @@
-# Plan-level checks. They catch the settings that are easy to get subtly wrong and that
-# no assertion in the running system would notice until something times out.
-
 variables {
   project = "tftest"
 }

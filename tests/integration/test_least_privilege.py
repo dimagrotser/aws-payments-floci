@@ -1,8 +1,7 @@
-"""The processor's role is checked against the deployed policy, not against the .tf file.
+"""Checked against the deployed role, not against the .tf file.
 
-Floci evaluates IAM for real (FLOCI_SERVICES_IAM_ENFORCEMENT_ENABLED in docker-compose.yml),
-so `simulate-principal-policy` answers the same question the emulator would answer at
-request time. Widen the policy in terraform/main.tf and these tests go red.
+Floci evaluates IAM for real, so `simulate-principal-policy` answers the same question
+the emulator would answer at request time. Widen the policy and these tests go red.
 """
 
 import pytest

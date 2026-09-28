@@ -1,7 +1,6 @@
-# Actions are known before anything is applied, so a stray wildcard is caught here, for
-# free, without a running emulator. The resources those actions apply to are only known
-# after apply, and tests/integration/test_least_privilege.py checks those against the
-# deployed role using the same evaluator Floci uses at request time.
+# Actions are known before apply, so a stray wildcard is caught here without a running
+# emulator. Resources are not, and tests/integration/test_least_privilege.py checks those
+# against the deployed role.
 
 variables {
   project = "tftest"

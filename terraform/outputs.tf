@@ -1,5 +1,3 @@
-# The test suites read these instead of guessing resource names.
-
 output "bucket" {
   description = "Bucket holding decisions and reports"
   value       = module.storage.bucket

@@ -1,10 +1,3 @@
-"""The transaction as it travels through the system.
-
-A plain dataclass rather than a pydantic model on purpose: this module is imported by
-the Lambda handlers, and their zips have to stay free of compiled dependencies.
-The API keeps its own pydantic models at the HTTP edge and converts to this.
-"""
-
 from __future__ import annotations
 
 import json
@@ -13,14 +6,13 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 CURRENCIES = frozenset({"EUR", "USD", "GBP"})
+REQUIRED_FIELDS = frozenset(
+    {"transaction_id", "customer_id", "amount", "currency", "country", "created_at"}
+)
 
 
 class InvalidTransaction(ValueError):
-    """The payload is not a transaction we can act on.
-
-    Raised out of the handler on purpose so the message goes back to the queue and
-    eventually to the dead letter queue, instead of being silently dropped.
-    """
+    pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,10 +34,7 @@ def parse_transaction(body: str) -> Transaction:
     if not isinstance(raw, dict):
         raise InvalidTransaction(f"expected a JSON object, got {type(raw).__name__}")
 
-    missing = sorted(
-        {"transaction_id", "customer_id", "amount", "currency", "country", "created_at"}
-        - raw.keys()
-    )
+    missing = sorted(REQUIRED_FIELDS - raw.keys())
     if missing:
         raise InvalidTransaction(f"missing fields: {', '.join(missing)}")
 

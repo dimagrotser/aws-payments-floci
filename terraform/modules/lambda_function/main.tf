@@ -1,6 +1,3 @@
-# A Lambda plus exactly the permissions it needs. Callers pass their own statements;
-# the only thing granted for free is writing to this function's own log group.
-
 data "archive_file" "package" {
   type        = "zip"
   source_dir  = var.source_dir

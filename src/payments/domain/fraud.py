@@ -1,10 +1,3 @@
-"""Anti-fraud rules.
-
-Three rules, deliberately boring, because the interesting part of this project is the
-plumbing around them. They are pure functions over a transaction plus a snapshot of what
-we know about the customer, so the same code runs in a unit test and in Lambda.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -30,12 +23,6 @@ class Rules:
 
 @dataclass(frozen=True, slots=True)
 class CustomerHistory:
-    """What the caller managed to find out about this customer.
-
-    `recent_transactions` counts transactions inside the velocity window. Stage 1 has
-    nowhere to count them yet and passes 0; stage 2 fills it in from the database.
-    """
-
     recent_transactions: int = 0
 
 

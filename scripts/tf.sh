@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# Runs terraform in a pinned container, attached to the compose network.
-#
-# Being on the network is the point: the endpoint is then http://floci:4566 for
-# terraform, for the Lambda containers and for the ECS task alike, so nothing in
-# terraform/ has to know whether it is being applied from the host or from CI.
+# Terraform in a pinned container, on the compose network, so that the Floci endpoint
+# is the same string here, in the Lambda containers and in the ECS task.
 set -euo pipefail
 
 TERRAFORM_VERSION="1.16.4"
