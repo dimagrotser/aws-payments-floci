@@ -49,6 +49,9 @@ jobs:
 
   gitleaks:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v5
         with:
@@ -56,6 +59,9 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITLEAKS_CONFIG: .gitleaks.toml
+          # Required for pull request events, where the action scans the range and
+          # comments on what it finds.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   unit:
     runs-on: ubuntu-24.04
