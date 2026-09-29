@@ -8,6 +8,9 @@ type Outputs = {
   dlq_url: string;
   db_secret_arn: string;
   max_receive_count: number;
+  bucket: string;
+  reporter_function: string;
+  report_schedule: string;
 };
 
 const here = dirname(fileURLToPath(import.meta.url));

@@ -54,6 +54,16 @@ def iam():
 
 
 @pytest.fixture(scope="session")
+def lambda_client():
+    return _client("lambda")
+
+
+@pytest.fixture(scope="session")
+def events():
+    return _client("events")
+
+
+@pytest.fixture(scope="session")
 def db_engine(outputs):
     # Floci advertises the database under a name only containers resolve, but the port
     # it gives out is published, so the host connects to the same port on localhost.

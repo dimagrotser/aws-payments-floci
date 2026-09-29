@@ -6,11 +6,11 @@ status, failed messages end up in a DLQ, and a scheduled Lambda drops a daily CS
 All of it is Terraform. None of it needs an AWS account, because it runs on
 [Floci](https://floci.io), a local emulator.
 
-> **Status: work in progress.** Stage 3 is done: a FastAPI service on ECS, behind an
-> application load balancer, accepts a transaction, writes it as pending and publishes it
-> to SQS. A Lambda reads the database credentials from Secrets Manager, applies the
-> anti-fraud rules against the customer's recent history and settles the row. Messages
-> nobody can parse end up in the dead letter queue. The daily report comes next.
+> **Status: work in progress.** Stage 4 is done, which means the whole architecture is
+> in place: the API on ECS accepts a transaction and publishes it, a Lambda settles it
+> against the anti-fraud rules, messages nobody can parse land in the dead letter queue,
+> and a scheduled Lambda writes the day's transactions to S3 as CSV. What is left is CI,
+> the published test report and the last pass over the documentation.
 
 ## Quickstart
 
@@ -54,6 +54,15 @@ PGPASSWORD=$(aws secretsmanager get-secret-value --secret-id payments-db/master 
 
 Put something that is not a transaction straight onto the queue and watch it arrive in
 `payments-transactions-dlq` about a minute later.
+
+The daily report runs at 02:00 on a schedule, which is a long time to wait, so ask for a
+particular day instead:
+
+```bash
+aws lambda invoke --function-name payments-reporter --cli-binary-format raw-in-base64-out \
+  --payload "{\"day\": \"$(date -u +%F)\"}" /dev/stdout
+aws s3 cp "s3://payments-artifacts/reports/$(date -u +%F).csv" -
+```
 
 Port 8088 for an API that listens on 80, port 7001 for a database that thinks it is on
 5432, and `localhost` where the secret says `floci`. All three are explained below.

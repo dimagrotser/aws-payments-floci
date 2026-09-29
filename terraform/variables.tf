@@ -55,3 +55,15 @@ variable "api_image_tag" {
   type        = string
   default     = "dev"
 }
+
+variable "reports_prefix" {
+  description = "Prefix in the bucket the daily report is written under"
+  type        = string
+  default     = "reports"
+}
+
+variable "report_schedule" {
+  description = "When the daily report runs"
+  type        = string
+  default     = "cron(0 2 * * ? *)"
+}

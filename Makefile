@@ -31,6 +31,7 @@ down: ## Stop Floci and the containers it started
 
 build: ## Lay out the Lambda packages
 	./scripts/build-lambda.sh processor
+	./scripts/build-lambda.sh reporter
 
 deploy: build ## Apply the Terraform stack, push the API image, migrate the database
 	$(TF) init -input=false

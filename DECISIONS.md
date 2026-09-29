@@ -112,6 +112,19 @@ writing tests matters more there.
 The version the Lambda runtime runs, so the tests and the deployed code agree on the
 language they are written in.
 
+## The report is a schedule in Terraform and a direct invoke in tests
+
+The rule is written the way it would be on AWS, `cron(0 2 * * ? *)`, and a test asserts
+that it is a cron rather than a rate and that it points at the reporter. What the tests
+cannot do is make it fire: Floci offers no way to trigger a scheduled rule, and its
+inspection endpoints cover SQS, SNS, SES and Kinesis but not EventBridge. So the tests
+invoke the reporter the way EventBridge would, and the schedule itself is checked as
+configuration rather than as behaviour. Floci does fire scheduled rules on time, which
+was measured during the spike, so the gap is in the tooling, not in the emulator.
+
+The reporter takes the day as an argument and defaults to yesterday. A report that can
+only ever describe yesterday is a report you cannot test.
+
 ## Checking least privilege twice
 
 `terraform test` asserts on the actions a role is granted, which are known before anything

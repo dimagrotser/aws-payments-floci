@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -76,3 +76,16 @@ def insert_pending(
 
 def fetch(session: Session, transaction_id: str) -> TransactionRecord | None:
     return session.get(TransactionRecord, transaction_id)
+
+
+def transactions_on(session: Session, day: date) -> list[TransactionRecord]:
+    start = datetime.combine(day, time.min, tzinfo=UTC)
+    statement = (
+        select(TransactionRecord)
+        .where(
+            TransactionRecord.created_at >= start,
+            TransactionRecord.created_at < start + timedelta(days=1),
+        )
+        .order_by(TransactionRecord.created_at, TransactionRecord.transaction_id)
+    )
+    return list(session.scalars(statement))

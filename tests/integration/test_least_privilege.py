@@ -5,6 +5,7 @@ pytestmark = pytest.mark.integration
 PROCESSOR_ROLE = "arn:aws:iam::000000000000:role/payments-processor-role"
 API_TASK_ROLE = "arn:aws:iam::000000000000:role/payments-api-task-role"
 API_EXECUTION_ROLE = "arn:aws:iam::000000000000:role/payments-api-execution-role"
+REPORTER_ROLE = "arn:aws:iam::000000000000:role/payments-reporter-role"
 
 
 @pytest.fixture(scope="module")
@@ -34,6 +35,14 @@ def api(decide):
         return decide(API_TASK_ROLE, action, resource)
 
     return _api
+
+
+@pytest.fixture(scope="module")
+def reporter(decide):
+    def _reporter(action: str, resource: str) -> str:
+        return decide(REPORTER_ROLE, action, resource)
+
+    return _reporter
 
 
 def test_it_may_read_the_database_credentials(simulate, outputs):
@@ -90,3 +99,32 @@ def test_the_api_cannot_pull_its_own_image(decide, outputs):
     # That belongs to the execution role, which is a different identity on purpose.
     assert decide(API_TASK_ROLE, "ecr:BatchGetImage", "*") != "allowed"
     assert decide(API_EXECUTION_ROLE, "sqs:SendMessage", "*") != "allowed"
+
+
+def test_the_reporter_may_write_its_report(reporter, outputs):
+    key = f"arn:aws:s3:::{outputs['bucket']}/{outputs['reports_prefix']}/2026-03-14.csv"
+
+    assert reporter("s3:PutObject", key) == "allowed"
+
+
+def test_the_reporter_may_not_write_outside_its_prefix(reporter, outputs):
+    assert (
+        reporter("s3:PutObject", f"arn:aws:s3:::{outputs['bucket']}/anything-else.csv") != "allowed"
+    )
+
+
+def test_the_reporter_may_not_read_the_bucket_back(reporter, outputs):
+    key = f"arn:aws:s3:::{outputs['bucket']}/{outputs['reports_prefix']}/2026-03-14.csv"
+
+    assert reporter("s3:GetObject", key) != "allowed"
+
+
+def test_the_reporter_has_nothing_to_do_with_the_queue(reporter, queue_arn):
+    assert reporter("sqs:ReceiveMessage", queue_arn) != "allowed"
+    assert reporter("sqs:SendMessage", queue_arn) != "allowed"
+
+
+def test_the_processor_may_not_write_reports(simulate, outputs):
+    key = f"arn:aws:s3:::{outputs['bucket']}/{outputs['reports_prefix']}/2026-03-14.csv"
+
+    assert simulate("s3:PutObject", key) != "allowed"

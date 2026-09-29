@@ -104,3 +104,42 @@ module "api" {
     },
   ]
 }
+
+module "reporter" {
+  source = "./modules/lambda_function"
+
+  name       = "${var.project}-reporter"
+  source_dir = "${local.build_dir}/lambda/reporter"
+  build_dir  = local.build_dir
+  handler    = "payments.reporter.handler.handler"
+  timeout    = 60
+
+  environment = {
+    DB_SECRET_ARN  = module.database.secret_arn
+    REPORTS_BUCKET = module.storage.bucket
+    REPORTS_PREFIX = var.reports_prefix
+  }
+
+  policy_statements = [
+    {
+      sid       = "WriteReports"
+      actions   = ["s3:PutObject"]
+      resources = ["${module.storage.arn}/${var.reports_prefix}/*"]
+    },
+    {
+      sid       = "ReadDatabaseCredentials"
+      actions   = ["secretsmanager:GetSecretValue"]
+      resources = [module.database.secret_arn]
+    },
+  ]
+}
+
+module "daily_report" {
+  source = "./modules/schedule"
+
+  name                = "${var.project}-daily-report"
+  description         = "Writes yesterday's transactions to S3 as CSV"
+  schedule_expression = var.report_schedule
+  function_arn        = module.reporter.arn
+  function_name       = module.reporter.function_name
+}

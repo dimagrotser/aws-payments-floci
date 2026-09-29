@@ -72,3 +72,18 @@ output "api_service" {
   description = "ECS service running the API"
   value       = module.api.service_name
 }
+
+output "reports_prefix" {
+  description = "Where the daily report is written"
+  value       = var.reports_prefix
+}
+
+output "reporter_function" {
+  description = "Name of the reporter Lambda"
+  value       = module.reporter.function_name
+}
+
+output "report_schedule" {
+  description = "When the report rule fires"
+  value       = module.daily_report.schedule_expression
+}
