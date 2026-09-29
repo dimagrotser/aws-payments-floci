@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# Jobs get what they need and nothing more; only `plan` and `report` widen this.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

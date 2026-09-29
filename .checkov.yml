@@ -1,7 +1,14 @@
 # What is left after fixing everything worth fixing. Each skip is a decision, not a
 # silenced alarm, and each one would be revisited before this ran in a real account.
+# The whole repository, the way the action scans it in CI, so a finding cannot show up
+# there and stay invisible here.
 directory:
-  - terraform
+  - .
+skip-path:
+  - build
+  - node_modules
+  - .venv
+  - .terraform
 quiet: true
 compact: true
 skip-check:

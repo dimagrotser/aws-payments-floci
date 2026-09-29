@@ -28,4 +28,9 @@ RUN useradd --uid 10001 --no-create-home app
 USER app
 
 EXPOSE 8000
+
+# No curl in a slim image, and adding one for this would be a strange trade.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+
 CMD ["uvicorn", "payments.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
