@@ -1,16 +1,45 @@
 # aws-payments-floci
 
-A transaction processing system shaped the way you would actually build one on AWS: an API
-on ECS writes to RDS and publishes to SQS, a Lambda applies anti-fraud rules and settles the
-status, failed messages end up in a DLQ, and a scheduled Lambda drops a daily CSV on S3.
-All of it is Terraform. None of it needs an AWS account, because it runs on
-[Floci](https://floci.io), a local emulator.
+A transaction processing system shaped the way you would actually build one on AWS. An
+API on ECS takes a payment, writes it as pending and publishes it; a Lambda applies
+anti-fraud rules against the customer's recent history and settles the row in PostgreSQL;
+messages nobody can parse are retried and then set aside in a dead letter queue; a
+scheduled Lambda drops the day's transactions on S3 as CSV. Every piece of it is
+Terraform, every role is scoped to one job, and the whole thing runs on a laptop with
+nothing but Docker, because the AWS it talks to is [Floci](https://floci.io), a local
+emulator. There is no account, no credential and no bill anywhere in this repository.
 
-> **Status: work in progress.** Stage 4 is done, which means the whole architecture is
-> in place: the API on ECS accepts a transaction and publishes it, a Lambda settles it
-> against the anti-fraud rules, messages nobody can parse land in the dead letter queue,
-> and a scheduled Lambda writes the day's transactions to S3 as CSV. What is left is CI,
-> the published test report and the last pass over the documentation.
+[![ci](https://github.com/dimagrotser/aws-payments-floci/actions/workflows/ci.yml/badge.svg)](https://github.com/dimagrotser/aws-payments-floci/actions/workflows/ci.yml)
+
+**[Test report](https://dimagrotser.github.io/aws-payments-floci/)**: unit, integration
+and end to end results from the last run on main, in one Allure report.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    client([client]) -->|POST /transactions| alb[Application<br/>Load Balancer]
+    alb --> api[API on ECS<br/>FastAPI]
+    api -->|INSERT pending| rds[(RDS<br/>PostgreSQL)]
+    api -->|SendMessage| queue[SQS<br/>transactions]
+
+    queue -->|event source mapping| processor[Lambda<br/>processor]
+    processor -->|anti-fraud rules| processor
+    processor -->|UPDATE approved / rejected| rds
+    queue -.->|after 3 failures| dlq[SQS<br/>dead letter queue]
+
+    schedule[EventBridge<br/>cron 02:00] --> reporter[Lambda<br/>reporter]
+    reporter -->|SELECT the day| rds
+    reporter -->|CSV| s3[(S3<br/>reports/)]
+
+    secrets[[Secrets Manager]] -.->|credentials| api
+    secrets -.->|credentials| processor
+    secrets -.->|credentials| reporter
+```
+
+The API answers immediately with `pending` and the decision arrives about a second later,
+which is the point of splitting them: a card payment should not wait on a fraud check,
+and a fraud check should not hold an HTTP connection open.
 
 ## Quickstart
 
@@ -20,12 +49,12 @@ make deploy       # build and push the images, apply the stack, migrate the data
 make test         # unit tests
 make integration  # pytest against the running emulator
 make e2e          # Playwright against the deployed API
+make report       # merge both into one Allure report
 ```
 
-You need Docker, [uv](https://docs.astral.sh/uv/) and Node. Terraform runs in a pinned
-container, so there is no Terraform to install.
-
-The reasoning behind the technology choices is in [DECISIONS.md](DECISIONS.md).
+You need Docker, [uv](https://docs.astral.sh/uv/) and Node. Terraform, tflint, checkov,
+gitleaks and Allure all run from pinned containers, so there is nothing else to install
+and CI runs the same versions you do.
 
 ## Trying it by hand
 
@@ -66,6 +95,42 @@ aws s3 cp "s3://payments-artifacts/reports/$(date -u +%F).csv" -
 
 Port 8088 for an API that listens on 80, port 7001 for a database that thinks it is on
 5432, and `localhost` where the secret says `floci`. All three are explained below.
+
+## What this demonstrates
+
+**Infrastructure as code that someone else can read.** Seven Terraform modules, one per
+component, each with its own variables, outputs and version constraints. `terraform test`
+makes fifteen assertions about the configuration before anything is applied, tflint and
+checkov run on every push, and the twenty five checkov findings that are deliberately
+accepted are listed with a reason each in `.checkov.yml` rather than silenced.
+
+**Least privilege that is actually enforced.** Every Lambda and the ECS task have a role
+of their own, and Floci evaluates IAM policies for real. So the claim is testable: the
+integration suite asks the IAM simulator whether the API can consume the queue it
+publishes to, whether the processor can write reports, whether the reporter can read the
+bucket back. All three answers are no, and widening a policy turns a test red. The ECS
+task is the honest exception, and it is documented below rather than glossed over.
+
+**No secret in the repository, and none in the state file either.** The database password
+is generated by an ephemeral resource and handed to the instance and to Secrets Manager
+through write-only arguments, so `terraform.tfstate` holds `null` where the password would
+be. gitleaks runs on every push.
+
+**Four levels of testing, each answering a different question.** Unit tests cover the
+rules with no AWS anywhere near them. Integration tests drive the real emulator and wait
+for real effects. `terraform test` catches configuration mistakes before they are applied.
+End to end tests go through the API with Playwright and then check the other side
+independently, in PostgreSQL with `pg` and in SQS with the AWS SDK, because an API that
+reports success and a database that disagrees is the failure worth catching.
+
+**An asynchronous system tested without sleeps.** Every assertion about an effect polls
+with a deadline. The dead letter queue scenario is set up once in a module-scoped fixture,
+because a redrive takes a minute of real time and paying that per assertion would be
+careless.
+
+**Idempotency where the delivery guarantee demands it.** SQS delivers at least once, so
+the processor upserts rather than inserts, and a test submits the same transaction twice
+to prove one row comes out.
 
 ## Where Floci differs from AWS
 
@@ -109,3 +174,23 @@ task-role credentials needs a helper image that is not published anywhere, and F
 back to unrestricted credentials without a word in the logs. The task role is declared the
 way it would be on AWS, but locally it constrains nothing, and this README would rather
 say so than imply otherwise.
+
+**Scheduled rules fire, but nothing can make them fire on demand.** Measured during the
+spike: a `rate(1 minute)` rule invoked its target exactly a minute later, once. There is
+no API to trigger a schedule and no inspection endpoint for EventBridge, so the daily
+report rule is checked as configuration and the reporter is invoked directly in tests.
+
+## Layout
+
+```
+src/payments/          domain rules, database access, the API, the two handlers
+terraform/             root module, seven component modules, terraform test files
+terraform/floci.tf     everything that exists only because the target is an emulator
+tests/unit/            pytest, no AWS
+tests/integration/     pytest against the running emulator
+tests/e2e/             Playwright, API plus direct checks in RDS, SQS and S3
+services/api/          the API image
+scripts/               everything the Makefile calls
+```
+
+The reasoning behind the technology choices is in [DECISIONS.md](DECISIONS.md).

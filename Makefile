@@ -9,7 +9,7 @@ AWS_ENV := AWS_ENDPOINT_URL=http://localhost:4566 AWS_ACCESS_KEY_ID=test \
 	AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1
 OUTPUT = uv run python -c "import json,sys;print(json.load(open('build/outputs.json'))[sys.argv[1]]['value'])"
 
-.PHONY: help up build deploy migrate destroy down clean logs test integration e2e tf prose
+.PHONY: help up build deploy migrate destroy down clean logs test integration e2e report lint security tf prose
 
 help: ## Show available targets
 	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/\t/' | expand -t22
@@ -61,13 +61,28 @@ destroy: ## Remove everything Terraform created
 	$(TF) destroy -auto-approve -input=false
 
 test: ## Run the unit tests
-	uv run pytest tests/unit
+	uv run pytest tests/unit --alluredir=build/allure-results/unit
 
 integration: ## Run the tests that talk to Floci (needs make deploy first)
-	@$(AWS_ENV) uv run pytest tests/integration
+	@$(AWS_ENV) uv run pytest tests/integration --alluredir=build/allure-results/integration
 
 e2e: ## Run the Playwright tests against the deployed API
 	cd tests/e2e && npm ci --no-audit --no-fund && npx playwright test
+
+lint: ## ruff, tflint and the prose check
+	uv run ruff check .
+	uv run ruff format --check .
+	$(TF) fmt -check -recursive
+	docker run --rm -v "$(PWD):/data" -w /data ghcr.io/terraform-linters/tflint:v0.64.0 --init
+	docker run --rm -v "$(PWD):/data" -w /data ghcr.io/terraform-linters/tflint:v0.64.0 --recursive
+	./scripts/check-prose.sh
+
+security: ## checkov and gitleaks
+	docker run --rm -v "$(PWD):/work" -w /work bridgecrew/checkov:3.3.20 --config-file .checkov.yml
+	docker run --rm -v "$(PWD):/work" -w /work zricethezav/gitleaks:v8.30.1 dir /work --config /work/.gitleaks.toml --no-banner
+
+report: ## Merge the pytest and Playwright results into one Allure report
+	./scripts/allure.sh
 
 clean: down ## Also drop local state and caches
 	rm -rf terraform/.terraform terraform/*.tfstate* terraform/*.tfplan .cache build

@@ -57,6 +57,12 @@ resource "aws_lambda_function" "this" {
   timeout       = var.timeout
   memory_size   = var.memory_size
 
+  reserved_concurrent_executions = var.reserved_concurrency
+
+  tracing_config {
+    mode = "Active"
+  }
+
   filename         = data.archive_file.package.output_path
   source_code_hash = data.archive_file.package.output_base64sha256
 

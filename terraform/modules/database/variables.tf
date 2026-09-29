@@ -43,6 +43,12 @@ variable "allocated_storage" {
   default     = 20
 }
 
+variable "backup_retention_days" {
+  description = "How many days of automated backups to keep"
+  type        = number
+  default     = 7
+}
+
 variable "password_version" {
   description = "Bump to rotate the master password; both the instance and the secret follow it"
   type        = number

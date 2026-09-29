@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated trees. Nothing here is committed, and vendored libraries trip the generic rules."
+paths = [
+  '''(^|/)build/''',
+  '''(^|/)\.venv/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)\.terraform/''',
+  '''(^|/)\.cache/''',
+]

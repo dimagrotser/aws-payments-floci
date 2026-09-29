@@ -30,6 +30,12 @@ resource "aws_db_instance" "this" {
   vpc_security_group_ids = [var.security_group_id]
   publicly_accessible    = false
 
+  auto_minor_version_upgrade          = true
+  backup_retention_period             = var.backup_retention_days
+  copy_tags_to_snapshot               = true
+  iam_database_authentication_enabled = true
+  enabled_cloudwatch_logs_exports     = ["postgresql", "upgrade"]
+
   skip_final_snapshot = true
   apply_immediately   = true
 }

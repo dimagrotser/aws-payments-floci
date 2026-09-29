@@ -13,6 +13,7 @@
     "@playwright/test": "1.63.0",
     "@types/node": "26.6.3",
     "@types/pg": "8.23.1",
+    "allure-playwright": "3.13.0",
     "pg": "8.23.0",
     "typescript": "5.9.3"
   }

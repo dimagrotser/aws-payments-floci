@@ -1,0 +1,172 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  AWS_DEFAULT_REGION: us-east-1
+  AWS_ENDPOINT_URL: http://localhost:4566
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.6"
+          enable-cache: true
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: ./scripts/check-prose.sh
+      - uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: v0.64.0
+      - run: tflint --init
+      - run: tflint --recursive
+
+  security:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: bridgecrewio/checkov-action@v12
+        with:
+          config_file: .checkov.yml
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.6"
+          enable-cache: true
+      - run: uv run pytest tests/unit --alluredir=build/allure-results/unit
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: allure-unit
+          path: build/allure-results
+          retention-days: 7
+
+  plan:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.6"
+          enable-cache: true
+      - run: make up
+      - run: ./scripts/build-lambda.sh processor && ./scripts/build-lambda.sh reporter
+      - run: ./scripts/tf.sh init -input=false
+      - name: terraform plan
+        id: plan
+        run: |
+          ./scripts/tf.sh plan -no-color -input=false > plan.txt 2>&1 || true
+          {
+            echo 'stdout<<PLAN'
+            tail -c 60000 plan.txt
+            echo 'PLAN'
+          } >> "$GITHUB_OUTPUT"
+      - uses: actions/github-script@v8
+        if: github.event_name == 'pull_request'
+        with:
+          script: |
+            const body = [
+              '### terraform plan',
+              '',
+              '<details><summary>show</summary>',
+              '',
+              '```',
+              `${{ steps.plan.outputs.stdout }}`,
+              '```',
+              '',
+              '</details>',
+            ].join('\n');
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo, issue_number: context.issue.number,
+            });
+            const mine = comments.find((c) =>
+              c.user.type === 'Bot' && c.body.startsWith('### terraform plan'));
+            if (mine) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: mine.id, body });
+            } else {
+              await github.rest.issues.createComment({
+                ...context.repo, issue_number: context.issue.number, body });
+            }
+
+  tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.6"
+          enable-cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: tests/e2e/package-lock.json
+      - run: make up
+      - run: make deploy
+      - run: ./scripts/tf.sh test
+      - run: make integration
+      - run: make e2e
+      - name: floci logs
+        if: failure()
+        run: docker compose logs --tail=200 floci
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: allure-tests
+          path: build/allure-results
+          retention-days: 7
+
+  report:
+    needs: [unit, tests]
+    if: always() && github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: allure-*
+          merge-multiple: true
+          path: build/allure-results
+      - name: keep the history so the report has a trend
+        run: |
+          git fetch origin gh-pages --depth=1 || exit 0
+          git --work-tree=/tmp/pages checkout origin/gh-pages -- . 2>/dev/null || exit 0
+          for suite in build/allure-results/*/; do
+            cp -R /tmp/pages/history "$suite" 2>/dev/null || true
+          done
+      - run: npx --yes allure-commandline@2.46.1 generate --clean -o build/allure-report build/allure-results/*/
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: build/allure-report
+          force_orphan: true

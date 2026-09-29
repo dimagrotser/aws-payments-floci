@@ -52,6 +52,12 @@ variable "policy_statements" {
   default = []
 }
 
+variable "reserved_concurrency" {
+  description = "Cap on concurrent executions, so one function cannot starve the others"
+  type        = number
+  default     = 10
+}
+
 variable "log_retention_days" {
   description = "How long CloudWatch keeps the logs"
   type        = number

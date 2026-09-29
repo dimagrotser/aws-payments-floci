@@ -25,6 +25,7 @@ api = [
 ]
 dev = [
     "alembic>=1.16.0",
+    "allure-pytest>=2.16.1",
     "boto3>=1.40.0",
     "pytest>=8.4.0",
     "pytest-timeout>=2.4.0",

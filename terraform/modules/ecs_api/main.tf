@@ -1,10 +1,19 @@
 resource "aws_ecr_repository" "this" {
   name         = var.name
   force_delete = true
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
 }
 
 resource "aws_ecs_cluster" "this" {
   name = var.name
+
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
 }
 
 resource "aws_cloudwatch_log_group" "this" {
@@ -90,9 +99,10 @@ resource "aws_ecs_task_definition" "this" {
 
   container_definitions = jsonencode([
     {
-      name      = var.name
-      image     = "${aws_ecr_repository.this.repository_url}:${var.image_tag}"
-      essential = true
+      name                   = var.name
+      image                  = "${aws_ecr_repository.this.repository_url}:${var.image_tag}"
+      essential              = true
+      readonlyRootFilesystem = true
 
       portMappings = [{
         containerPort = var.container_port
@@ -116,11 +126,12 @@ resource "aws_ecs_task_definition" "this" {
 }
 
 resource "aws_lb" "this" {
-  name               = var.name
-  load_balancer_type = "application"
-  internal           = true
-  subnets            = var.subnet_ids
-  security_groups    = [var.security_group_id]
+  name                       = var.name
+  load_balancer_type         = "application"
+  internal                   = true
+  subnets                    = var.subnet_ids
+  security_groups            = [var.security_group_id]
+  drop_invalid_header_fields = true
 }
 
 resource "aws_lb_target_group" "this" {
@@ -160,7 +171,7 @@ resource "aws_ecs_service" "this" {
   network_configuration {
     subnets          = var.subnet_ids
     security_groups  = [var.security_group_id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
 
   load_balancer {
