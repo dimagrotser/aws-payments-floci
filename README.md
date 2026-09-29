@@ -95,6 +95,12 @@ arrives. The listener binds a port *of the Floci container*, though, which is wh
 maps `8088:80` rather than publishing the task's own port. The load balancer's DNS name
 does not resolve at all, so tests address the listener.
 
+**Floci outlives itself.** The ECR registry and every database run in containers Floci
+starts on its own, with their data in volumes of their own, so a repository survives
+`docker compose down` and greets the next deploy with `RepositoryAlreadyExists`. `make
+down` removes both the containers and the volumes, which is the only way a second
+`make deploy` behaves like the first.
+
 **IAM enforcement is real for Lambda and absent for ECS.** Floci ignores policies unless
 `FLOCI_SERVICES_IAM_ENFORCEMENT_ENABLED` is set; with it on, a Lambda gets genuine
 assumed-role credentials and a call outside its policy comes back `AccessDenied`. That is

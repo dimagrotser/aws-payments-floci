@@ -22,12 +22,17 @@ up: ## Start Floci and wait until it is healthy
 		printf '.'; sleep 1; \
 	done; echo " timed out"; $(COMPOSE) logs --tail=40 floci; exit 1
 
-down: ## Stop Floci and the containers it started
+down: ## Stop Floci and everything it started
 	@# Floci starts RDS/Lambda/ECS/ECR containers itself and compose knows nothing about
 	@# them; they have to go first, or they keep the network alive.
 	@leftovers=$$(docker ps -aq --filter 'name=floci-'); \
 	if [ -n "$$leftovers" ]; then docker rm -f $$leftovers >/dev/null; echo "removed $$(echo $$leftovers | wc -w | tr -d ' ') floci-managed containers"; fi
 	$(COMPOSE) down -v --remove-orphans
+	@# The ECR registry and the database keep their data in volumes of their own, which
+	@# is how a repository survives a restart and greets the next deploy with
+	@# RepositoryAlreadyExists.
+	@volumes=$$(docker volume ls -q --filter 'name=floci-'); \
+	if [ -n "$$volumes" ]; then docker volume rm $$volumes >/dev/null; echo "removed $$(echo $$volumes | wc -w | tr -d ' ') floci-managed volumes"; fi
 
 build: ## Lay out the Lambda packages
 	./scripts/build-lambda.sh processor
