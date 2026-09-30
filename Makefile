@@ -5,11 +5,12 @@ SHELL := /usr/bin/env bash
 
 COMPOSE := docker compose
 TF := ./scripts/tf.sh
+GITLEAKS := zricethezav/gitleaks:v8.30.1
 AWS_ENV := AWS_ENDPOINT_URL=http://localhost:4566 AWS_ACCESS_KEY_ID=test \
 	AWS_SECRET_ACCESS_KEY=test AWS_DEFAULT_REGION=us-east-1
 OUTPUT = uv run python -c "import json,sys;print(json.load(open('build/outputs.json'))[sys.argv[1]]['value'])"
 
-.PHONY: help up build deploy migrate destroy down clean logs test integration e2e report lint security tf prose
+.PHONY: help up build deploy migrate destroy down clean logs test integration e2e report lint security checkov gitleaks tf prose
 
 help: ## Show available targets
 	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/\t/' | expand -t22
@@ -77,9 +78,16 @@ lint: ## ruff, tflint and the prose check
 	docker run --rm -v "$(PWD):/data" -w /data ghcr.io/terraform-linters/tflint:v0.64.0 --recursive
 	./scripts/check-prose.sh
 
-security: ## checkov and gitleaks
+security: checkov gitleaks ## checkov and gitleaks
+
+checkov: ## Scan the infrastructure and the workflows
 	docker run --rm -v "$(PWD):/work" -w /work bridgecrew/checkov:3.3.20 --config-file .checkov.yml
-	docker run --rm -v "$(PWD):/work" -w /work zricethezav/gitleaks:v8.30.1 dir /work --config /work/.gitleaks.toml --no-banner
+
+# Both modes: `dir` sees what is on disk right now, `git` sees everything that was ever
+# committed, including a secret added and removed again.
+gitleaks: ## Scan the working tree and the history for secrets
+	docker run --rm -v "$(PWD):/work" -w /work $(GITLEAKS) dir /work --config /work/.gitleaks.toml --no-banner
+	docker run --rm -v "$(PWD):/work" -w /work $(GITLEAKS) git /work --config /work/.gitleaks.toml --no-banner
 
 report: ## Merge the pytest and Playwright results into one Allure report
 	./scripts/allure.sh

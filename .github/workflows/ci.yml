@@ -43,25 +43,18 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - uses: bridgecrewio/checkov-action@v12
-        with:
-          config_file: .checkov.yml
+      - run: make checkov
 
   gitleaks:
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITLEAKS_CONFIG: .gitleaks.toml
-          # Required for pull request events, where the action scans the range and
-          # comments on what it finds.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # The same pinned image the Makefile uses, rather than the action: the action
+      # derives a commit range from the event and cannot scan the first push to a
+      # repository, where the previous commit is all zeroes.
+      - run: make gitleaks
 
   unit:
     runs-on: ubuntu-24.04
