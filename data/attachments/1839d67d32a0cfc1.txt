@@ -1,0 +1,2 @@
+INFO     root:handler.py:26 decided tx-1 approved (passed all rules)
+INFO     root:handler.py:26 decided tx-2 approved (passed all rules)

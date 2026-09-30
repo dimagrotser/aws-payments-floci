@@ -1,0 +1,1 @@
+INFO     root:handler.py:26 decided tx-2 rejected (amount 5000 over limit 1000)
