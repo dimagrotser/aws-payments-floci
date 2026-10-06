@@ -1,0 +1,26 @@
+INFO     root:handler.py:26 decided tx-1 approved (passed all rules)
+ERROR    root:handler.py:28 message msg-poison failed
+Traceback (most recent call last):
+  File "/home/runner/work/aws-payments-floci/aws-payments-floci/src/payments/domain/transaction.py", line 30, in parse_transaction
+    raw = json.loads(body)
+  File "/home/runner/work/_temp/uv-python-dir/cpython-3.13.13-linux-x86_64-gnu/lib/python3.13/json/__init__.py", line 352, in loads
+    return _default_decoder.decode(s)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/home/runner/work/_temp/uv-python-dir/cpython-3.13.13-linux-x86_64-gnu/lib/python3.13/json/decoder.py", line 345, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/_temp/uv-python-dir/cpython-3.13.13-linux-x86_64-gnu/lib/python3.13/json/decoder.py", line 363, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/work/aws-payments-floci/aws-payments-floci/src/payments/processor/handler.py", line 25, in handler
+    outcome = process(record["body"], rules, session)
+  File "/home/runner/work/aws-payments-floci/aws-payments-floci/src/payments/processor/handler.py", line 35, in process
+    transaction = parse_transaction(body)
+  File "/home/runner/work/aws-payments-floci/aws-payments-floci/src/payments/domain/transaction.py", line 32, in parse_transaction
+    raise InvalidTransaction(f"body is not JSON: {exc}") from exc
+payments.domain.transaction.InvalidTransaction: body is not JSON: Expecting value: line 1 column 1 (char 0)
+INFO     root:handler.py:26 decided tx-3 approved (passed all rules)

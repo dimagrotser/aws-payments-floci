@@ -1,0 +1,10 @@
+ERROR    root:handler.py:28 message msg-tx-1 failed
+Traceback (most recent call last):
+  File "/home/runner/work/aws-payments-floci/aws-payments-floci/src/payments/processor/handler.py", line 25, in handler
+    outcome = process(record["body"], rules, session)
+  File "/home/runner/work/aws-payments-floci/aws-payments-floci/src/payments/processor/handler.py", line 41, in process
+    record_decision(session, transaction, decision)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/aws-payments-floci/aws-payments-floci/tests/unit/test_processor_handler.py", line 100, in explode
+    raise RuntimeError("the database said no")
+RuntimeError: the database said no
