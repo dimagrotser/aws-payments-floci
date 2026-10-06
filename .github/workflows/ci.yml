@@ -150,6 +150,28 @@ jobs:
           path: build/allure-results
           retention-days: 7
 
+  triage:
+    needs: [unit, tests]
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: allure-*
+          merge-multiple: true
+          path: build/allure-results
+      - uses: dimagrotser/ai-test-failure-triage@v1
+        with:
+          allure: |
+            build/allure-results/unit
+            build/allure-results/integration
+            build/allure-results/e2e
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+
   report:
     needs: [unit, tests]
     if: always() && github.event_name == 'push'
